@@ -49,24 +49,13 @@ class BinloaderFromFile:
 
     def draw(self, display):
         dx, dy = 0, 0
-        if self.x <= 0:
-            ax = 0
-        elif self.x + self.w > display.width:
-            ax = display.width - self.w
-        else:
-            ax = self.x
-        if self.y <= 0:
-            ay = 0
-        elif self.y + self.h > display.height:
-            ay = display.height - self.h
-        else:
-            ay = self.y
         pixCounter = 0
         self.f.seek(self.dataP)
         temp = self.f.read(1)
         while (temp != b""):
             for i in range(8):
-                display.pixel(ax + dx, ay + dy, getbin(int.from_bytes(temp, "big"), 7 - i))
+                if(self.x+dx<=display.width and self.y+dy<=display.height and self.x+dx>=0 and self.y+dy>=0):
+                    display.pixel(self.x + dx, self.y + dy, getbin(int.from_bytes(temp, "big"), 7 - i))
                 dx += 1
                 pixCounter += 1
                 if pixCounter >= 8 * getPageLen(self.w):
@@ -95,25 +84,13 @@ class BinloaderFromMem:
 
     def draw(self, display):
         dx, dy = 0, 0
-        if self.x <= 0:
-            ax = 0
-        elif self.x + self.w > display.width:
-            ax = display.width - self.w
-        else:
-            ax = self.x
-        if self.y <= 0:
-            ay = 0
-        elif self.y + self.h > display.height:
-            ay = display.height - self.h
-        else:
-            ay = self.y
         pixCounter = 0
-
         for d in self.data:
             # print(temp,end='')
             for i in range(8):
+                if(self.x+dx<=display.width and self.y+dy<=display.height and self.x+dx>=0 and self.y+dy>=0):
+                    display.pixel(self.x + dx, self.y + dy, getbin(d, 7 - i))
                 # print(self.x+dx, self.y+dy)
-                display.pixel(ax + dx, ay + dy, getbin(d, 7 - i))
                 dx += 1
                 pixCounter += 1
                 if pixCounter >= 8 * getPageLen(self.w):
@@ -173,11 +150,11 @@ class BinloaderFast:
             ax = self.x
         if self.y <= 0:
             ay = 0
-        elif self.y + self.h > display.height:
-            ay = display.height - self.ch
+        elif self.y + self.ch > display.height:
+            ay = getPageLen(display.height) - getPageLen(self.ch)
         else:
             ay = self.y
-        start = ax + 128 * self.y
+        start = ax + 128 * ay
         for i in range(getPageLen(self.ch)):
             display.buffer[start + 128 * i:start + 128 * i + self.cw] = self.cutdata[i * self.cw:(i + 1) * self.cw]
     def draw(self, display):
@@ -189,13 +166,14 @@ class BinloaderFast:
             ax = self.x
         if self.y <= 0:
             ay = 0
-        elif self.y + self.h > display.height:
-            ay = display.height - self.h
+        elif self.y + self.h > getPageLen(self.h):
+            ay = getPageLen(display.height) - getPageLen(self.h)
         else:
             ay = self.y
-        start = ax + 128 * self.y
+        start = ax + 128 * ay
         for i in range(getPageLen(self.h)):
             display.buffer[start + 128 * i:start + 128 * i + self.w] = self.data[i * self.w:(i + 1) * self.w]
+
 
 
 
