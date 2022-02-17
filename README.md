@@ -6,7 +6,7 @@ https://space.bilibili.com/87690728
 How to use？  
 1. upload sprite.py and ssd1306.py   
 2. use img2oled software and upload the file like"bg1000.bin"  
-<img src="https://github.com/coinight/-Micropython-esp32-oled1306-sprite/blob/main/load.jpg" width = "200">  
+<img src="https://github.com/coinight/-Micropython-esp32-oled1306-sprite/blob/main/load.png" width = "200">  
 4. use the code below  
 for soft i2c:  
 ```python
