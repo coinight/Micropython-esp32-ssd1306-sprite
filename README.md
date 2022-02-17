@@ -8,6 +8,7 @@ How to use？
 2. use img2oled software and upload the file like"bg1000.bin"  
 <img src="https://github.com/coinight/-Micropython-esp32-oled1306-sprite/blob/main/load.png" width = "200">  
 4. use the code below  
+  
 for soft i2c:  
 ```python
   from sprite import *  
