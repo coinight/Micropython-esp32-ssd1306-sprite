@@ -147,7 +147,6 @@ class fframe:
                     self.cutdata.append((((data[x + self.cw * y] >> bis << bis) & 0xff)<< bis2 & 0xff) >> bis2)
             y += 1
 
-    # 没写完
     def cropdraw(self, display, has_transform: bool = None):
         if self.x <= 0:
             ax = 0
@@ -355,7 +354,7 @@ class DataDisplayScreen:
         self.data.append(other)
         return self
     def AutoHeight(self):
-        self.height = min((self.y-1)/max(self.data),(63-self.y)/min(self.data))
+        self.height = min(abs((self.y-1)/max(self.data)),abs((63-self.y)/min(self.data)))
     def draw(self, display):
         if len(self.data) <= 1:
             return
@@ -365,3 +364,19 @@ class DataDisplayScreen:
                          self.x+(i+1)*self.delta,round(-self.data[i+1]*self.height)+self.y,
                          self.width)
             i += 1
+def DataScale(data,scale):
+    re = []
+    inv = False
+    if scale == 0:
+        return re
+    if scale < 0:
+        scale = - scale
+        inv = True
+    scale = len(data)/(scale*len(data))
+    i = 0
+    while  math.ceil(i) < len(data):
+        re.append(data[math.ceil(i)])
+        i += scale
+    if inv:
+        re.reverse()
+    return re
