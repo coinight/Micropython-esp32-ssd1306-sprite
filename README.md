@@ -7,3 +7,4 @@ https://space.bilibili.com/87690728
 
 Support BMP load
 Crop X & XY
+![IMG_20220715_145255](https://user-images.githubusercontent.com/32589807/179172274-169db147-2c54-4077-b367-528f3ea126db.png)
