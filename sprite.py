@@ -21,11 +21,13 @@
 # Author:爱玩游戏的陆千辰
 # Video:https://space.bilibili.com/87690728
 # Describe:屏幕精灵控制
-# Version:v0.47a
-#
-from sys import maxsize
+# Version:v0.52bt
+# The project deponds on Micropython
+# Support: SSD1306(i2c spi) SSH1106(i2c spi)
+
 import framebuf
 import math
+import time,os
 # def getbin(inta: int, x: int) -> int:
 #     if x > 0:
 #         return (inta >> x) - (inta >> (x + 1)) * 2
@@ -71,7 +73,7 @@ def DataScale(data,scale):
     if inv:
         re.reverse()
     return re
-def bmpdecode(filename,newname = None,biasY = 0,limit=128,log=True,InvertColor=False):
+def bmpdecode(filename,newname = None,biasY = 0,limit=128,log=True,InvertColor=False,delAfterDecode = False):
     f=open(filename, 'rb')
     if f.read(2) == b'BM':  #header
         dummy = f.read(8) #file size(4), creator bytes(4)
@@ -96,7 +98,7 @@ def bmpdecode(filename,newname = None,biasY = 0,limit=128,log=True,InvertColor=F
                 buff = open(newname+'.bin','wb+')
                 buff.write(b'\x22\x01')
                 buff.write(width.to_bytes(2,'little'))
-                buff.write(height.to_bytes(2,'little'))
+                buff.write((getPageLen(height)*8).to_bytes(2,'little'))
                 temp = [0]*width
                 temp2 = height - 1+ biasY
                 if(InvertColor):
@@ -149,18 +151,84 @@ def bmpdecode(filename,newname = None,biasY = 0,limit=128,log=True,InvertColor=F
                         row = row+1
                         if log:
                             print("decoding :%d%%"%(row*100//height))
-    shift = height %8
+    else:
+        raise TypeError("Type not support")
+    shift = height % 8
     if(shift != 0):
+        shift = (8 - shift)
         i = 0
         while i < len(temp):
             temp[i] = temp[i] >> shift
             i+=1
-        buff.write(bytearray(temp))
+    buff.write(bytearray(temp))
     f.close()
     buff.close()
+    if(delAfterDecode):
+        os.remove(filename)
     print('Encode Finish save to: '+newname+'.bin')
     return BinloaderFile(newname+'.bin')
-
+def qr2frame(matrix,savename = "QRCode.bin"):
+    buff = open(savename,'wb')
+    buff.write(b'\x22\x01')
+    boxSize = len(matrix)
+    buff.write(boxSize.to_bytes(2,'little'))
+    
+    boxHigh = getPageLen(boxSize)
+    buff.write((boxHigh*8).to_bytes(2,'little'))
+    i = 0
+    data = [0] * boxSize
+    while i<boxSize:
+        j = 0
+        if(i != 0 and i % 8 == 0):
+            buff.write(bytearray(data))
+            data = [0]*boxSize
+        
+        while j < boxSize:
+            data[j] = data[j]>>1
+            if(matrix[i][j]):
+                data[j] = data[j]+128
+            j = j+1
+        i = i+1
+    shift = (8 - boxSize % 8)
+    if(shift != 0):
+        i = 0
+        while i < boxSize:
+            data[i] = data[i] >> shift
+            i+=1
+    buff.write(bytearray(data))
+    buff.close()
+    return BinloaderFile(savename)
+def qr2frameSize2(matrix,savename = "QRCode.bin"):
+    buff = open(savename,'wb')
+    buff.write(b'\x22\x01')
+    boxSize = len(matrix)*2
+    buff.write(boxSize.to_bytes(2,'little'))
+    
+    boxHigh = getPageLen(boxSize)
+    buff.write((boxHigh*8).to_bytes(2,'little'))
+    i = 0
+    data = [0] * boxSize
+    while i<boxSize:
+        j = 0
+        if(i != 0 and i % 8 == 0):
+            buff.write(bytearray(data))
+            data = [0]*boxSize
+        
+        while j < boxSize:
+            data[j] = data[j]>>1
+            if(matrix[i//2][j//2]):
+                data[j] = data[j]+128
+            j = j+1
+        i = i+1
+    shift = boxSize % 8
+    if(shift != 0):
+        i = 0
+        while i < boxSize:
+            data[i] = data[i] >> shift
+            i+=1
+    buff.write(bytearray(data))
+    buff.close()
+    return BinloaderFile(savename)
 class __fframe:
     def draw(self, display, has_transform: bool = False):
         try:
@@ -175,7 +243,7 @@ class __fframe:
         except AttributeError:
             posx = clamp(self.x,0,display.w - self.w)
             posy = clamp(self.y,0,deltaY)
-        start = posx + 128 * posy
+        start = posx + w * posy
         i = 0
         drawW = min(self.w,w)
         drawH = min(deltaY,display.pages)
@@ -188,13 +256,13 @@ class __fframe:
                     display.buffer[temp+j] |= self.data[i * self.w + j]
                     j+=1
                 i+=1
-                temp += 128
+                temp += w
             return
         else:
             while i<drawH:
                 display.buffer[temp:temp+drawW] = self.data[i * self.w:i * self.w + drawW]
                 i+=1
-                temp += 128
+                temp += w
             return
     def setxy(self, x=None, y=None):
         if x != None:
@@ -214,7 +282,7 @@ class __fframe:
             maxH = temp
         ax = clamp(posx,0,w - (tox - fromx))
         ay = clamp(getPageLen(posy),0,temp - maxH)
-        start = ax + 128 * ay
+        start = ax + w * ay
         drawW = min(tox-fromx,w)
         if drawW > w:
             drawW = w
@@ -223,7 +291,7 @@ class __fframe:
         while i<maxH:
             display.buffer[start:start+drawW] = self.data[temp:temp + drawW]
             i+=1
-            start += 128
+            start += w
             temp += self.w
     def cropDrawXY(self,posx,posy,fromx,tox,fromy,toy,display,has_transform: bool = False):
         try:
@@ -237,7 +305,7 @@ class __fframe:
         deltaX = min(w,deltaX)
         posx = clamp(posx,0,w - deltaX)
         posy = clamp(posy,0,temp - deltaY)
-        start = posx + 128 * posy
+        start = posx + w * posy
         i = 0
         di = getPageLen(fromy)
         temp = start
@@ -252,7 +320,7 @@ class __fframe:
                     display.buffer[temp+j] |= self.data[temp2+ j]
                     j+=1
                 i+=1
-                temp += 128
+                temp += w
                 temp2 += self.w
             return
         else:
@@ -261,7 +329,7 @@ class __fframe:
                     return
                 display.buffer[temp:temp+deltaX] = self.data[temp2:temp2+ deltaX]
                 i+=1
-                temp += 128
+                temp += w
                 temp2 += self.w
             return
 
@@ -303,11 +371,11 @@ class BinloaderFile(__fframe):
         
         try:
             posx = clamp(self.x,0,display.width - self.w)
-            posy = clamp(self.y,0,deltaY)
+            posy = clamp(self.y,0,display.height - deltaY)
         except AttributeError:
             posx = clamp(self.x,0,display.w - self.w)
-            posy = clamp(self.y,0,deltaY)
-        start = posx + 128 * posy
+            posy = clamp(self.y,0,display.h - deltaY)
+        start = posx + w * posy
         i = 0
         drawW = min(self.w,w)
         drawH = min(deltaY,display.pages)
@@ -321,7 +389,7 @@ class BinloaderFile(__fframe):
                     display.buffer[temp+j] |= int.from_bytes(self.f.read(1),'big')
                     j+=1
                 i+=1
-                temp += 128
+                temp += w
             return
         else:
             while i<drawH:
@@ -332,7 +400,7 @@ class BinloaderFile(__fframe):
                 else:
                     display.buffer[temp:temp+drawW] = bytearray(drawW)
                 i+=1
-                temp += 128
+                temp += w
             return
     def cropDrawX(self,posx,posy,fromx,tox,display):
         try:
@@ -347,7 +415,7 @@ class BinloaderFile(__fframe):
             maxH = temp
         ax = clamp(posx,0,w - (tox - fromx))
         ay = clamp(getPageLen(posy),0,temp - maxH)
-        start = ax + 128 * ay
+        start = ax + w * ay
         drawW = min(tox-fromx,w)
         if drawW > w:
             drawW = w
@@ -357,7 +425,7 @@ class BinloaderFile(__fframe):
             self.f.seek(temp+6)
             display.buffer[start:start+drawW] = self.f.read(drawW)# self.data[temp:temp + drawW]
             i+=1
-            start += 128
+            start += w
             temp += self.w
     def cropDrawXY(self,posx,posy,fromx,tox,fromy,toy,display,has_transform: bool = False):
         try:
@@ -367,11 +435,11 @@ class BinloaderFile(__fframe):
         deltaY = getPageLen(toy - fromy)
         deltaX = tox - fromx
         temp = getPageLen(h)
-        deltaY = min(temp,deltaY)
-        deltaX = min(w,deltaX)
+        deltaY = min(temp,deltaY,self.h)
+        deltaX = min(w,deltaX,self.w)
         posx = clamp(posx,0,w - deltaX)
         posy = clamp(posy,0,temp - deltaY)
-        start = posx + 128 * posy
+        start = posx + w * posy
         i = 0
         di = getPageLen(fromy)
         temp = start
@@ -385,7 +453,7 @@ class BinloaderFile(__fframe):
                     display.buffer[temp+j] |= int.from_bytes(self.f.read(1),'big')
                     j+=1
                 i+=1
-                temp += 128
+                temp += w
                 temp2 += self.w
             return
         else:
@@ -393,7 +461,7 @@ class BinloaderFile(__fframe):
                 self.f.seek(temp2+6)
                 display.buffer[temp:temp+deltaX] = self.f.read(deltaX)
                 i+=1
-                temp += 128
+                temp += w
                 temp2 += self.w
             return
     def __del__(self):
@@ -561,7 +629,7 @@ class TextSelectUI:
             return
         if(self.nowLine<self.start):
             self.start = self.nowLine - self.data[self.selectIndex] + 1
-    def draw(self, display):
+    def draw(self, display, supportChs = False):
         loop = 0 # 能画几行
         start = self.start # 行数开始
         end = min(self.h+1,len(self.text))
@@ -575,7 +643,7 @@ class DataDisplayScreen:
     def __init__(self, delta=5, length=128, x=0, y=32,width = 1,height = 1):
         self.data = []
         self.len = (length/delta)
-        if(self.len <= 0):self.len = 128
+        if(self.len <= 0):self.len = w
         self.delta = delta if delta > 1 else 1
         self.height = height
         self.x = x
@@ -597,3 +665,146 @@ class DataDisplayScreen:
                          self.x+(i+1)*self.delta,round(-self.data[i+1]*self.height)+self.y,
                          self.width)
             i += 1
+class AnimatePics:
+    def __init__(self,frameList,x = 0,y = 0,isLoop= True,dt = 50):
+        self.framList = frameList
+        self.isLoop = isLoop
+        self.index = 0
+        self.x = x
+        self.y = y
+        self.dt = dt
+        self.lastDrawTime = 0
+    def draw(self,display):
+        temp = time.ticks_ms()
+        if temp - self.lastDrawTime > self.dt:
+            self.lastDrawTime = temp
+            if(self.index == len(self.framList) - 1):
+                if(self.isLoop):
+                    self.index = 0
+            else:
+                self.index += 1
+        self.framList[self.index].setxy(self.x,self.y)
+        self.framList[self.index].draw(display)
+class CloseAni:
+    def __init__(self,display) -> None:
+        self.isFinished = False
+        try:
+            self.h = display.h
+            self.w = display.w
+        except Exception:
+            self.h = display.height
+            self.w = display.width
+        self.index = 0
+    def draw(self,display):
+        if self.isFinished:
+            return
+        display.line(0,self.index,self.w,self.index,0)
+        display.line(0,self.index+1,self.w,self.index+1,1)
+        display.line(0,self.h-self.index,self.w,self.h-self.index,0)
+        display.line(0,self.h-self.index-1,self.w,self.h-self.index-1,1)
+        self.index += 1
+        if self.index == self.h//2:
+            self.isFinished = True
+            display.fill(0)
+def chsC2enc(d):
+    if 0x4e00<=d<=0x9fa5 or d < 128:
+        return d
+    if(d == 0xff0c):
+        return 0x2c
+    elif(d == 0x3002):
+        return 0x2e
+    elif(d == 0xff1a):
+        return 0x3b
+    elif(d == 0x201c or d == 0x201d):
+        return 0x22
+    elif(d == 0x2019 or d == 0x2018):
+        return 0x27
+    elif(d == 0x3010):
+        return 0x5b
+    elif(d == 0x3011):
+        return 0x5d
+    elif(d == 0xff08):
+        return 0x28
+    elif(d == 0xff09):
+        return 0x29
+    elif(d==0xff1b):
+        return 0x3b
+    elif(d == 0x3001):
+        return 0xb7
+    elif(d == 0xff01):
+        return 0x21
+    print(d,chr(d))
+# def lstScale(lst,toSize):
+#     temp = []
+#     if toSize <= 0:
+#         return temp
+#     i = 0
+#     fromSize = len(lst)
+#     delta = fromSize/toSize
+#     while i<toSize:
+#         print(math.floor(i*delta))
+#         temp.append(lst[math.floor(i*delta)])
+#         i = i+1
+#     return  temp
+# def barrayScale(lst,toSize):
+#     temp = bytearray()
+#     if toSize <= 0:
+#         return temp
+#     i = 0
+#     fromSize = len(lst)
+#     delta = fromSize/toSize
+#     while i<toSize:
+#         print(lst[math.floor(i*delta)])
+#         temp.append(lst[math.floor(i*delta)])
+#         i = i+1
+#     return  temp
+
+# def barray2Lst(buff:bytearray):
+#     data = []
+#     for b in buff:
+#         for bi in range(8):
+#             data.append(bool(getbin(b,bi)))
+#     return data
+# def lit2Barray(l:list):
+#     size = getPageLen(len(l))
+#     barray = bytearray(size)
+#     i = 0
+#     for barrayi in range(size):
+#         d = 0
+#         for b in range(8):
+#             d += (255>>b) if l[i] else 0
+class SpriteFont16:
+    def __init__(self,filename) -> None:
+        self.bias = 0x4e00
+        self.f = open(filename,'rb')
+        if(self.f.read(3) != b'f16'):
+            raise TypeError("!!!Font not support!!!")
+    def text(self,x,y,data,display,size = 16):
+        i = 0
+        p = 0
+        ori = size
+        for d in data:
+            d = ord(d)
+            d = chsC2enc(d)
+            if 0< d <128:
+                self.f.seek((d)*32 +3)
+                if d == ord('m'):
+                    size = ori
+                elif ord('A') <= d <=ord("Z"):
+                    size = math.ceil(ori/8*7)
+                elif ord('A') > d > ord('0'):
+                    size = math.ceil(ori/8*3)
+                else:
+                    size = math.ceil(ori/8*5)
+            elif d>= 0x4e00:
+                self.f.seek((d-self.bias+128)*32 +3)
+                size = ori
+            data = framebuf.FrameBuffer1(bytearray(self.f.read(32)), 16, 16)
+            try:
+                display.framebuf.blit(data,x+i,y+p)
+            except AttributeError:
+                display.blit(data,x+i,y+p)
+            i = i+size
+            if i> 128 - x:
+                p += size
+                i = 0
